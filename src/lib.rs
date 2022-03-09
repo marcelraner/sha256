@@ -193,7 +193,8 @@ mod tests {
         let result = ucs0!(0x00000000u32);
         assert_eq!(result, 0x00000000u32);
 
-        todo!();
+        let result = ucs0!(0x1234abcdu32);
+        assert_eq!(result, 0xC84A8F1Eu32);
     }
 
     #[test]
@@ -201,7 +202,8 @@ mod tests {
         let result = ucs1!(0x00000000u32);
         assert_eq!(result, 0x00000000u32);
 
-        todo!();
+        let result = ucs1!(0x1234abcdu32);
+        assert_eq!(result, 0x57BF72B3u32);
     }
 
     #[test]
@@ -209,7 +211,8 @@ mod tests {
         let result = lcs0!(0x00000000u32);
         assert_eq!(result, 0x00000000u32);
 
-        todo!();
+        let result = lcs0!(0x1234abcdu32);
+        assert_eq!(result, 0xB291B8A3u32);
     }
 
     #[test]
@@ -217,6 +220,7 @@ mod tests {
         let result = lcs1!(0x00000000u32);
         assert_eq!(result, 0x00000000u32);
 
-        todo!();
+        let result = lcs1!(0x1234abcdu32);
+        assert_eq!(result, 0xC09BA676u32);
     }
 }
