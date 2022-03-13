@@ -124,8 +124,191 @@ macro_rules! add32 {
     };
 }
 
+/// computes an intermediate hash during the sha256 computation
+fn compute_intermediate_digest(
+    intermediate_digest: &mut [u32; 8],
+    message_shedule: &mut [u32; 64],
+) {
+    // the following calculations are implemented as described in
+    // FIPS PUB 180-4 section 6.2.2
+
+    // complete the preparation of the message schedule
+    for i in 16..64 {
+        message_shedule[i] = add32!(
+            lcs1!(message_shedule[i - 2]),
+            message_shedule[i - 7],
+            lcs0!(message_shedule[i - 15]),
+            message_shedule[i - 16]
+        );
+    }
+
+    /*for i in 0..16 {
+        println!("W[{}] = {:08X}", i, message_shedule[i]);
+    }*/
+
+    // initialize the eight working variables
+    let mut a = intermediate_digest[0];
+    let mut b = intermediate_digest[1];
+    let mut c = intermediate_digest[2];
+    let mut d = intermediate_digest[3];
+    let mut e = intermediate_digest[4];
+    let mut f = intermediate_digest[5];
+    let mut g = intermediate_digest[6];
+    let mut h = intermediate_digest[7];
+
+    // do some calculations as described in point 3 of section 6.2.2
+    for i in 0..64 {
+        let t1 = add32!(
+            h,
+            ucs1!(e),
+            ch!(e, f, g),
+            CUBE_ROOTS_CONSTANTS[i],
+            message_shedule[i]
+        );
+        let t2 = add32!(ucs0!(a), maj!(a, b, c));
+        h = g;
+        g = f;
+        f = e;
+        e = add32!(d, t1);
+        d = c;
+        c = b;
+        b = a;
+        a = add32!(t1, t2);
+
+        /*println!(
+            "t= {}: {:08X} {:08X} {:08X} {:08X} {:08X} {:08X} {:08X} {:08X}",
+            i, a, b, c, d, e, f, g, h
+        );*/
+    }
+
+    // compute the new intermediate digest
+    intermediate_digest[0] = add32!(a, intermediate_digest[0]);
+    intermediate_digest[1] = add32!(b, intermediate_digest[1]);
+    intermediate_digest[2] = add32!(c, intermediate_digest[2]);
+    intermediate_digest[3] = add32!(d, intermediate_digest[3]);
+    intermediate_digest[4] = add32!(e, intermediate_digest[4]);
+    intermediate_digest[5] = add32!(f, intermediate_digest[5]);
+    intermediate_digest[6] = add32!(g, intermediate_digest[6]);
+    intermediate_digest[7] = add32!(h, intermediate_digest[7]);
+}
+
+/// calculates the sha256 for a given message
+fn compute_sha256_digest(message: &[u8]) -> [u32; 8] {
+    let mut intermediate_digest = INITIAL_HASH_VALUE;
+    let mut message_schedule = [0u32; 64];
+    let mut message_position: usize = 0;
+    let mut data_left = message.len();
+
+    // the following code splits the message into 512 bit blocks and calculates
+    // the intermediate digest for each block
+    while data_left > 0 {
+        if data_left <= 64 {
+            // initialize a new message digest block filled with zeros. (Because
+            // adding of data is done by or operator)
+            message_schedule = [0u32; 64];
+
+            // put the bytes from the message into the message schedule block
+            for i in message_position..message.len() {
+                message_schedule[(i / 4) % 16] |= (message[i] as u32) << (24 - ((i % 4) * 8));
+            }
+            message_position = message.len();
+
+            // closure for adding a termination bit to the end of the message
+            // within the message schedule block
+            let mut add_termination_bit = |message_schedule: &mut [u32; 64]| {
+                message_schedule[(message_position / 4) % 16] |=
+                    (0x80 as u32) << (24 - ((message_position % 4) * 8));
+            };
+
+            // if data_left is smaller than 64 bytes, then add the termination
+            // bit to the current block.
+            if data_left < 64 {
+                add_termination_bit(&mut message_schedule);
+            }
+
+            // check if the length information fits in the current message
+            // schedule block. If it does not fit, then compute the current
+            // block and create a new empty one.
+            if data_left >= 56 {
+                compute_intermediate_digest(&mut intermediate_digest, &mut message_schedule);
+                message_schedule = [0u32; 64];
+            }
+
+            // if data_left is exactly 64 bytes, then add the termination bit to
+            // the new block
+            if data_left == 64 {
+                add_termination_bit(&mut message_schedule);
+            }
+
+            // add the message length at the end of the message schedule block
+            let message_len = message.len() * 8;
+            message_schedule[15] = message_len as u32;
+            message_schedule[14] = (message_len >> 32) as u32;
+        } else {
+            // put the bytes from the message into the message schedule block
+            for i in 0..16 {
+                let j = i * 4;
+                message_schedule[i] = ((message[j + 0] as u32) << 24
+                    | (message[j + 1] as u32) << 16
+                    | (message[j + 2] as u32) << 8
+                    | (message[j + 3] as u32)) as u32
+            }
+            message_position += 64;
+        }
+
+        // do the calculations for the current block
+        compute_intermediate_digest(&mut intermediate_digest, &mut message_schedule);
+
+        data_left = message.len() - message_position;
+    }
+
+    // return the intermediate digest as result of the sha256 calculation
+    intermediate_digest
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::compute_sha256_digest;
+
+    #[test]
+    fn test_calculate_sha256_with_one_block() {
+        let message = "abc";
+        let expected_digest: [u32; 8] = [
+            0xBA7816BF, 0x8F01CFEA, 0x414140DE, 0x5DAE2223, 0xB00361A3, 0x96177A9C, 0xB410FF61,
+            0xF20015AD,
+        ];
+
+        let digest = compute_sha256_digest(message.as_bytes());
+
+        assert_eq!(digest, expected_digest);
+    }
+
+    #[test]
+    fn test_calculate_sha256_with_two_blocks() {
+        let message = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+        let expected_digest: [u32; 8] = [
+            0x248D6A61, 0xD20638B8, 0xE5C02693, 0x0C3E6039, 0xA33CE459, 0x64FF2167, 0xF6ECEDD4,
+            0x19DB06C1,
+        ];
+
+        let digest = compute_sha256_digest(message.as_bytes());
+
+        assert_eq!(digest, expected_digest);
+    }
+
+    #[test]
+    fn test_calculate_sha256_with_data_size_equal_block_size() {
+        let message = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopqopqrpqrs";
+        let expected_digest: [u32; 8] = [
+            0x5a5748c5, 0xc07341a6, 0xc8b2c06b, 0xa633247d, 0xc04b712d, 0x28fd2951, 0xcc911609,
+            0x15902d67,
+        ];
+
+        let digest = compute_sha256_digest(message.as_bytes());
+
+        assert_eq!(digest, expected_digest);
+    }
+
     #[test]
     fn test_cmp_macro() {
         let result = cmp!(0x00000000u32);
