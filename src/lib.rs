@@ -23,7 +23,7 @@ macro_rules! cmp {
 }
 
 /// bitwise AND macro
-macro_rules! and  {
+macro_rules! and {
     ($a:expr, $b:expr) => {
         ($a & $b)
     };
@@ -50,7 +50,7 @@ macro_rules! xor  {
 }
 
 /// right shift macro as described in FIPS PUB 180-4 section 3.2
-macro_rules! shr  {
+macro_rules! shr {
     ($value:expr, $bits:expr) => {
         ($value >> $bits)
     };
@@ -58,7 +58,7 @@ macro_rules! shr  {
 
 /// circular right shift macro as described in FIPS PUB 180-4 section 3.2
 /// warning: shift by more than 31 bits will result in an overflow
-macro_rules! rotr32  {
+macro_rules! rotr32 {
     ($value:expr, $bits:expr) => {
         ($value >> $bits | ($value << (32 - $bits)))
     };
@@ -66,51 +66,61 @@ macro_rules! rotr32  {
 
 /// circular left shift macro as described in FIPS PUB 180-4 section 3.2
 /// warning: shift by more than 31 bits will result in an overflow
-macro_rules! rotl32  {
+macro_rules! rotl32 {
     ($value:expr, $bits:expr) => {
         ($value << $bits | ($value >> (32 - $bits)))
     };
 }
 
 /// ch macro as described in FIPS PUB 180-4 section 4.1.2
-macro_rules! ch  {
+macro_rules! ch {
     ($x:expr, $y:expr, $z:expr) => {
         xor!(and!($x, $y), and!(cmp!($x), $z))
     };
 }
 
 /// maj macro as described in FIPS PUB 180-4 section 4.1.2
-macro_rules! maj  {
+macro_rules! maj {
     ($x:expr, $y:expr, $z:expr) => {
         xor!(and!($x, $y), and!($x, $z), and!($y, $z))
     };
 }
 
 /// upper case sigma 0 macro as described in FIPS PUB 180-4 section 4.1.2
-macro_rules! ucs0  {
+macro_rules! ucs0 {
     ($x:expr) => {
         xor!(rotr32!($x, 2), rotr32!($x, 13), rotr32!($x, 22))
     };
 }
 
 /// upper case sigma 1 macro as described in FIPS PUB 180-4 section 4.1.2
-macro_rules! ucs1  {
+macro_rules! ucs1 {
     ($x:expr) => {
         xor!(rotr32!($x, 6), rotr32!($x, 11), rotr32!($x, 25))
     };
 }
 
 /// lower case sigma 0 macro as described in FIPS PUB 180-4 section 4.1.2
-macro_rules! lcs0  {
+macro_rules! lcs0 {
     ($x:expr) => {
         xor!(rotr32!($x, 7), rotr32!($x, 18), shr!($x, 3))
     };
 }
 
 /// lower case sigma 1 macro as described in FIPS PUB 180-4 section 4.1.2
-macro_rules! lcs1  {
+macro_rules! lcs1 {
     ($x:expr) => {
         xor!(rotr32!($x, 17), rotr32!($x, 19), shr!($x, 10))
+    };
+}
+
+/// modulo 2^32 addition
+macro_rules! add32 {
+    ($a:expr, $b:expr) => {
+        (($a as u64 + $b as u64) as u32)
+    };
+    ($a:expr, $($b:expr),+) => {
+        add32!($a, add32!($($b),+))
     };
 }
 
@@ -222,5 +232,17 @@ mod tests {
 
         let result = lcs1!(0x1234abcdu32);
         assert_eq!(result, 0xC09BA676u32);
+    }
+
+    #[test]
+    fn test_add32_macro() {
+        let result = add32!(0x00000000u32, 0x00000000u32);
+        assert_eq!(result, 0x00000000u32);
+
+        let result = add32!(0xffffffffu32, 0x00000001u32, 0x00000001u32);
+        assert_eq!(result, 0x00000001u32);
+
+        let result = add32!(0xffffffffu32, 0xffffffffu32);
+        assert_eq!(result, 0xfffffffeu32);
     }
 }
