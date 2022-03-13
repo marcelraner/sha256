@@ -54,14 +54,6 @@ macro_rules! rotr32 {
     };
 }
 
-/// circular left shift macro as described in FIPS PUB 180-4 section 3.2
-/// warning: shift by more than 31 bits will result in an overflow
-macro_rules! rotl32 {
-    ($value:expr, $bits:expr) => {
-        ($value << $bits | ($value >> (32 - $bits)))
-    };
-}
-
 /// ch macro as described in FIPS PUB 180-4 section 4.1.2
 macro_rules! ch {
     ($x:expr, $y:expr, $z:expr) => {
@@ -183,7 +175,7 @@ fn compute_intermediate_digest(
 }
 
 /// calculates the sha256 for a given message
-fn compute_sha256_digest(message: &[u8]) -> [u32; 8] {
+pub fn compute_sha256_digest(message: &[u8]) -> [u32; 8] {
     let mut intermediate_digest = INITIAL_HASH_VALUE;
     let mut message_schedule = [0u32; 64];
     let mut message_position: usize = 0;
@@ -205,7 +197,7 @@ fn compute_sha256_digest(message: &[u8]) -> [u32; 8] {
 
             // closure for adding a termination bit to the end of the message
             // within the message schedule block
-            let mut add_termination_bit = |message_schedule: &mut [u32; 64]| {
+            let add_termination_bit = |message_schedule: &mut [u32; 64]| {
                 message_schedule[(message_position / 4) % 16] |=
                     (0x80 as u32) << (24 - ((message_position % 4) * 8));
             };
@@ -339,12 +331,6 @@ mod tests {
     fn test_rotr32_macro() {
         let result = rotr32!(0x00000002u32, 1);
         assert_eq!(result, 0x00000001u32);
-    }
-
-    #[test]
-    fn test_rotl32_macro() {
-        let result = rotl32!(0x00000001u32, 1);
-        assert_eq!(result, 0x00000002u32);
     }
 
     #[test]
