@@ -29,23 +29,13 @@ macro_rules! and {
     };
 }
 
-/// bitwise OR macro
-macro_rules! or  {
-    ($a:expr, $b:expr) => {
-        ($a | $b)
-    };
-    ($a:expr, $($b:expr),+) => {
-        ($a ^ or!($($b),+))
-    };
-}
-
 /// bitwise XOR macro
 macro_rules! xor  {
     ($a:expr, $b:expr) => {
         ($a ^ $b)
     };
     ($a:expr, $($b:expr),+) => {
-        ($a ^ xor!($($b),+))
+        xor!($a, xor!($($b),+))
     };
 }
 
@@ -325,12 +315,6 @@ mod tests {
     fn test_and_macro() {
         let result = and!(0b0101u32, 0b0011u32);
         assert_eq!(result, 0b0001u32);
-    }
-
-    #[test]
-    fn test_or_macro() {
-        let result = or!(0b0101u32, 0b0011u32);
-        assert_eq!(result, 0b0111u32);
     }
 
     #[test]
